@@ -60,6 +60,16 @@ int main()
     drawMatches(img1, matched1, img2, matched2, good_matches, dMatches);
     imshow("Matches", dMatches);
 
+    //-- Localize the object
+    std::vector<Point2f> points1;
+    std::vector<Point2f> points2;
+    for (size_t i = 0; i < good_matches.size(); i++)
+    {
+        //-- Get the keypoints from the good matches
+        points1.push_back(matched1[good_matches[i].queryIdx].pt);
+        points2.push_back(matched2[good_matches[i].trainIdx].pt);
+    }
+    Mat H = findHomography(points1, points2, RANSAC);
 
     waitKey();
     return 0;
