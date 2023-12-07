@@ -49,8 +49,8 @@ Mat MSICE(const Mat& Y, int M) {
                     out_dki = (255 + A) * y / (A + y);
                 }
                 else {
-                    float A2 = (s - y) == 0 ? M : M / (s - y);
-                    out_dki = A * y / (255 + A2 - y);
+                    //float A2 = (s - y) == 0 ? M : M / (s - y);
+                    out_dki = A * y / (255 + A - y);
                 }
                 out += out_dki;
             }
@@ -79,9 +79,9 @@ int main()
     Mat gAfterMSICE;
     vector<Mat> rgbAfterCLAHE = vector<Mat>(rgb.size());
 
-    gAfterMSICE = MSICE(rgb[1], 5000); //менять параметр, 500, 5000(метода), 50000, 500000
+    gAfterMSICE = MSICE(rgb[1], 50000); //менять параметр, 500, 5000(метода), 50000, 500000
 
-    Ptr<CLAHE> clahe = createCLAHE(4, Size(4, 4)); //2, Size(4, 4)       40, Size(8, 8)
+    Ptr<CLAHE> clahe = createCLAHE(2, Size(4, 4)); //2, Size(4, 4)       40, Size(8, 8)
     clahe->apply(rgb[2], rgbAfterCLAHE[2]);
     clahe->apply(gAfterMSICE, rgbAfterCLAHE[1]);
     clahe->apply(rgb[0], rgbAfterCLAHE[0]);
