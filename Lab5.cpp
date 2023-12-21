@@ -3,12 +3,23 @@
 #include "opencv2/highgui/highgui.hpp"
 #include "opencv2/calib3d/calib3d.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
+#include <opencv2/core/utils/logger.hpp>
 #include <iostream>
 #include <opencv2/opencv.hpp>
 
 using namespace cv;
 using namespace std;
 
+const std::vector<int> zigzagOrder = {
+    0, 1, 8, 16, 9, 2, 3, 10,
+    17, 24, 32, 25, 18, 11, 4, 5,
+    12, 19, 26, 33, 40, 48, 41, 34,
+    27, 20, 13, 6, 7, 14, 21, 28,
+    35, 42, 49, 56, 57, 50, 43, 36,
+    29, 22, 15, 23, 30, 37, 44, 51,
+    58, 59, 52, 45, 38, 31, 39, 46,
+    53, 60, 61, 54, 47, 55, 62, 63
+};
 
 Mat getHist(const Mat& hist_array, int scaleX = 1, int scaleY = 1)
 {
@@ -24,17 +35,8 @@ Mat getHist(const Mat& hist_array, int scaleX = 1, int scaleY = 1)
     return hist_img;
 }
 
-vector<float> zigzag(Mat block, int size) {
-    std::vector<int> zigzagOrder = {
-        0, 1, 8, 16, 9, 2, 3, 10,
-        17, 24, 32, 25, 18, 11, 4, 5,
-        12, 19, 26, 33, 40, 48, 41, 34,
-        27, 20, 13, 6, 7, 14, 21, 28,
-        35, 42, 49, 56, 57, 50, 43, 36,
-        29, 22, 15, 23, 30, 37, 44, 51,
-        58, 59, 52, 45, 38, 31, 39, 46,
-        53, 60, 61, 54, 47, 55, 62, 63
-    };
+vector<float> zigzag(Mat block) {
+    int size = 8;
 
     std::vector<float> result;
     int count = 0;
@@ -46,7 +48,8 @@ vector<float> zigzag(Mat block, int size) {
 
         if (val == prev) {
             count++;
-        }else {
+        }
+        else {
             result.push_back(count);
             result.push_back(prev);
             count = 1;
@@ -56,22 +59,14 @@ vector<float> zigzag(Mat block, int size) {
     result.push_back(count);
     result.push_back(prev);
     result.push_back(-1);
+
     return result;
 }
 
-Mat zigzagDecoder(const vector<float>& codeRLE, int size)
+Mat zigzagDecoder(const vector<float>& codeRLE)
 {
+    int size = 8;
     Mat result(size, size, CV_32F);
-    const int zigzagOrder[64] = {
-        0, 1, 8, 16, 9, 2, 3, 10,
-        17, 24, 32, 25, 18, 11, 4, 5,
-        12, 19, 26, 33, 40, 48, 41, 34,
-        27, 20, 13, 6, 7, 14, 21, 28,
-        35, 42, 49, 56, 57, 50, 43, 36,
-        29, 22, 15, 23, 30, 37, 44, 51,
-        58, 59, 52, 45, 38, 31, 39, 46,
-        53, 60, 61, 54, 47, 55, 62, 63
-    };
 
     int count = 0;
     for (int j = 0; j < codeRLE.size() - 1; j += 2)
@@ -80,13 +75,14 @@ Mat zigzagDecoder(const vector<float>& codeRLE, int size)
         int V = codeRLE[j + 1];
         int n_i = 0;
 
-        for (int i = count; i < size * size and n_i != N; i++, n_i ++)
+        for (int i = count; i < size * size and n_i != N; i++, n_i++)
         {
             result.at<float>(zigzagOrder[i] / size, zigzagOrder[i] % size) = V;
         }
 
         count += N;
     }
+
     return result;
 }
 
@@ -129,7 +125,7 @@ void Task2(const Mat& img) {
     // Разделение изображения на блоки 8x8 и выполнение ДКП преобразования для каждого блока 
     for (int y = 0; y < img_f.rows; y += 8) {
         for (int x = 0; x < img_f.cols; x += 8) {
-            Mat block = img_f(Rect(x, y, 8, 8)) * 255 - 128; //to [-127,127]
+            Mat block = img_f(Rect(x, y, 8, 8)) * 255 - 128; //to [-128,127]
 
             dct(block, block);
             block = (block / 8) + 128; //to [0,255]
@@ -169,12 +165,23 @@ void Task2(const Mat& img) {
 
 int main()
 {
+    utils::logging::setLogLevel(cv::utils::logging::LogLevel::LOG_LEVEL_SILENT);
+
     // Загрузка изображения
     int colorType = 0;
     Mat img = imread("shrek.png", colorType);
     if (img.empty()) {
         return 0;
     }
+
+    /* Size initialSize = img.size();
+    Mat padded;
+    int rowPadding = -img.rows % 8 + 8;
+    int colPadding = -img.cols % 8 + 8;
+    copyMakeBorder(img, padded, 0, rowPadding, 0, colPadding, cv::BORDER_CONSTANT, cv::Scalar::all(0));
+    cout << img.rows << ' ' << img.cols << endl;
+    cout << padded.rows << ' ' << padded.cols << endl;
+    imshow("padded", padded); */
     resize(img, img, Size(img.cols - img.cols % 8, img.rows - img.rows % 8));
 
 
@@ -182,16 +189,13 @@ int main()
     Task1(img);
 
 
-
     //-------------------- 2 ------------------
     Task2(img);
 
 
-
     //-------------------- 3 и 4------------------
-    
     Mat gamma = Mat::zeros(8, 8, CV_32S);
-    int quality = 1; // Ввод коэффициента масштаба квантования [1;31]
+    int quality = 31; // Ввод коэффициента масштаба квантования [1;31]
     for (int i = 0; i < 8; i++)
         for (int j = 0; j < 8; j++)
             gamma.at<int>(i, j) = 8 + (i + j) * quality;
@@ -204,56 +208,49 @@ int main()
     // Разделение изображения на блоки 8x8 и выполнение ДКП преобразования для каждого блока 
     for (int y = 0; y < img_f.rows; y += 8) {
         for (int x = 0; x < img_f.cols; x += 8) {
-            Mat block = img_f(Rect(x, y, 8, 8)) * 255 - 128; //to [-127,127]
-
+            Mat block = img_f(Rect(x, y, 8, 8)) * 255 - 128; //to [-128,127]
             dct(block, block);
-            //block = (block) / 8;
-            
+
             for (int i = 0; i < 8; i++) {
                 for (int j = 0; j < 8; j++) {
                     block.at<float>(i, j) = round(block.at<float>(i, j) / gamma.at<int>(i, j));
                 }
             }
 
-            vector<float> blockRLE = zigzag(block, 8);
+            vector<float> blockRLE = zigzag(block);
             resultCodeRLE.push_back(blockRLE);
             resultCounter++;
         }
     }
 
 
-
     //-------------------- 5 ------------------
-
-    float bitImg = img.rows * img.cols * 8;
+    int bitImg = img.rows * img.cols * 8; // sizeof(CV_8U)
     float bitRLE = 0;
     for (int i = 0; i < resultCodeRLE.size(); i++)
     {
-        bitRLE += resultCodeRLE[i].size() * 8;
+        bitRLE += resultCodeRLE[i].size() * 8; // sizeof(float)
     }
     cout << "Img bits count = " << (int)bitImg << endl;
     cout << "Img RLE bits count = " << (int)bitRLE << endl;
     cout << "Profit RLE = " << (1 - bitRLE / bitImg) * 100 << "%" << endl;
 
 
-
     //-------------------- 6 ------------------
-
     Mat decode_img = Mat::zeros(img.size(), CV_8U);
     int imgBlocksWidth = img.cols / 8;
 
     for (int i = 0; i < resultCodeRLE.size(); i++)
     {
-        Mat block = zigzagDecoder(resultCodeRLE[i], 8);
+        Mat block = zigzagDecoder(resultCodeRLE[i]);
 
         for (int z = 0; z < 8; z++) {
             for (int c = 0; c < 8; c++) {
                 block.at<float>(z, c) = round(block.at<float>(z, c) * gamma.at<int>(z, c));
             }
         }
-        
+
         block.convertTo(block, CV_32F);
-        //varible_img = (varible_img) * 8;
 
         idct(block, block);
 
@@ -266,14 +263,17 @@ int main()
         block.copyTo(outBlockRect);
     }
 
-
     Mat subtract_img;
     subtract(img, decode_img, subtract_img);
+
+    //Mat crop = decode_img(Range(0, initialSize.height), Range(0, initialSize.width));
+    //imshow("decode crop", crop);
 
     imshow("decode img", decode_img);
     imshow("subtract img", subtract_img);
 
     waitKey(0);
+
     return 0;
 }
 
